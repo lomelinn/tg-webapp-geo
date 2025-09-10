@@ -66,6 +66,16 @@
       }
     }
 
+    const tg = window.Telegram?.WebApp;
+    const logEl = document.getElementById('log');
+
+    function log(msg, cls){ const p=document.createElement('div'); if (cls) p.className=cls; p.textContent=msg; logEl.appendChild(p); }
+
+    // Aviso grande si NO está dentro de Telegram
+    if (!tg || !tg.initData) {
+      log("⚠️ Esta página está fuera de Telegram. Ábrela desde el botón del bot (/ubicacion).", "err");
+    }
+
     async function getAndSendLocation() {
       btnGet.disabled = true;
       log("Solicitando geolocalización del dispositivo...");
