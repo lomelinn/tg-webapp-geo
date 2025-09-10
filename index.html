@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Captura Segura de Ubicación</title>
+  <meta name="description" content="Mini App de Telegram para capturar ubicación verificada.">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { margin:0; padding:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, 'Helvetica Neue', Arial; }
+    body { background: var(--tg-theme-bg-color, #0f1115); color: var(--tg-theme-text-color, #e8e8e8); }
+    .wrap { padding: 16px; max-width: 520px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { opacity: .85; margin: 0 0 16px; }
+    .card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 16px; }
+    .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+    .btn { appearance: none; border: 0; border-radius: 12px; padding: 14px 16px; width: 100%; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: var(--tg-theme-button-color, #2ea6ff); color: var(--tg-theme-button-text-color, #fff); }
+    .btn-ghost { background: transparent; color: inherit; border: 1px dashed rgba(255,255,255,.3); }
+    .muted { font-size: 12px; opacity: .7; }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; font-size: 12px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 10px; }
+    .ok { color: #00d084; }
+    .err { color: #ff6b6b; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>📍 Captura Segura de Ubicación</h1>
+    <p>Esta pantalla usa la <strong>Telegram WebApp</strong> firmada. Al tocar el botón, tomamos tu ubicación <em>actual</em> del GPS del dispositivo y la enviamos al bot.</p>
+
+    <div class="card" id="card">
+      <div class="row" style="margin-bottom: 12px;">
+        <button class="btn btn-primary" id="btnGet">Obtener y Enviar Ubicación</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-ghost" id="btnClose">Cerrar</button>
+      </div>
+      <div class="log" id="log"></div>
+      <p class="muted">Tip: da permiso de ubicación a Telegram. No uses el clip.</p>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    const logEl = document.getElementById('log');
+    const btnGet = document.getElementById('btnGet');
+    const btnClose = document.getElementById('btnClose');
+
+    function log(msg, cls) {
+      const p = document.createElement('div');
+      if (cls) p.className = cls;
+      p.textContent = msg;
+      logEl.appendChild(p);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function ready() {
+      try {
+        tg?.ready();
+        tg?.expand?.();
+        tg?.MainButton?.hide?.();
+        log("WebApp lista.", "ok");
+      } catch (e) {
+        log("WebApp init warning: " + (e?.message || e), "err");
+      }
+    }
+
+    async function getAndSendLocation() {
+      btnGet.disabled = true;
+      log("Solicitando geolocalización del dispositivo...");
+
+      if (!navigator.geolocation) {
+        log("Geolocalización no disponible en este dispositivo.", "err");
+        btnGet.disabled = false;
+        return;
+      }
+      if (!tg?.initData) {
+        log("initData ausente. Abre esta página desde el botón del bot.", "err");
+        btnGet.disabled = false;
+        return;
+      }
+
+      const opts = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
+      const initData = tg.initData;
+
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+      }).catch((e) => {
+        log("Error de geolocalización: " + e.message, "err");
+        btnGet.disabled = false;
+        return null;
+      });
+
+      if (!position) return;
+
+      const { latitude, longitude, accuracy } = position.coords || {};
+      const t = Date.now();
+
+      log(\`OK: lat=\${latitude} lon=\${longitude} acc=\${accuracy}m\`, "ok");
+      try {
+        const payload = {
+          src: "webapp",
+          t,
+          lat: Number(latitude),
+          lon: Number(longitude),
+          acc: typeof accuracy === "number" ? Math.round(accuracy) : null,
+          initData
+        };
+        tg.sendData(JSON.stringify(payload));
+        log("Datos enviados al bot. Puedes cerrar esta ventana.", "ok");
+        setTimeout(() => tg.close(), 600);
+      } catch (e) {
+        log("Fallo al enviar datos al bot: " + (e?.message || e), "err");
+        btnGet.disabled = false;
+      }
+    }
+
+    btnGet.addEventListener('click', getAndSendLocation);
+    btnClose.addEventListener('click', () => tg?.close());
+    ready();
+  </script>
+</body>
+</html>
