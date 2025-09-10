@@ -19,7 +19,7 @@
     .btn-primary { background: var(--tg-theme-button-color, #2ea6ff); color: var(--tg-theme-button-text-color, #fff); }
     .btn-ghost { background: transparent; color: inherit; border: 1px dashed rgba(255,255,255,.3); }
     .muted { font-size: 12px; opacity: .7; }
-    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; font-size: 12px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 10px; }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; font-size: 12px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 10px; min-height: 56px; }
     .ok { color: #00d084; }
     .err { color: #ff6b6b; }
   </style>
@@ -27,7 +27,7 @@
 <body>
   <div class="wrap">
     <h1>📍 Captura Segura de Ubicación</h1>
-    <p>Esta pantalla usa la <strong>Telegram WebApp</strong> firmada. Al tocar el botón, tomamos tu ubicación <em>actual</em> del GPS del dispositivo y la enviamos al bot.</p>
+    <p>Esta pantalla usa la <strong>Telegram WebApp</strong> firmada. Al tocar el botón, tomamos tu ubicación <em>actual</em> del GPS y la enviamos al bot.</p>
 
     <div class="card" id="card">
       <div class="row" style="margin-bottom: 12px;">
@@ -37,98 +37,100 @@
         <button class="btn btn-ghost" id="btnClose">Cerrar</button>
       </div>
       <div class="log" id="log"></div>
-      <p class="muted">Tip: da permiso de ubicación a Telegram. No uses el clip.</p>
+      <p class="muted">Tip: da permiso de ubicación a Telegram y activa “Precisa” en iPhone. No uses el clip.</p>
     </div>
   </div>
 
   <script>
-    const tg = window.Telegram?.WebApp;
-    const logEl = document.getElementById('log');
-    const btnGet = document.getElementById('btnGet');
-    const btnClose = document.getElementById('btnClose');
+    (function(){
+      var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+      var logEl = document.getElementById('log');
+      var btnGet = document.getElementById('btnGet');
+      var btnClose = document.getElementById('btnClose');
 
-    function log(msg, cls) {
-      const p = document.createElement('div');
-      if (cls) p.className = cls;
-      p.textContent = msg;
-      logEl.appendChild(p);
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    function ready() {
-      try {
-        tg?.ready();
-        tg?.expand?.();
-        tg?.MainButton?.hide?.();
-        log("WebApp lista.", "ok");
-      } catch (e) {
-        log("WebApp init warning: " + (e?.message || e), "err");
-      }
-    }
-
-    const tg = window.Telegram?.WebApp;
-    const logEl = document.getElementById('log');
-
-    function log(msg, cls){ const p=document.createElement('div'); if (cls) p.className=cls; p.textContent=msg; logEl.appendChild(p); }
-
-    // Aviso grande si NO está dentro de Telegram
-    if (!tg || !tg.initData) {
-      log("⚠️ Esta página está fuera de Telegram. Ábrela desde el botón del bot (/ubicacion).", "err");
-    }
-
-    async function getAndSendLocation() {
-      btnGet.disabled = true;
-      log("Solicitando geolocalización del dispositivo...");
-
-      if (!navigator.geolocation) {
-        log("Geolocalización no disponible en este dispositivo.", "err");
-        btnGet.disabled = false;
-        return;
-      }
-      if (!tg?.initData) {
-        log("initData ausente. Abre esta página desde el botón del bot.", "err");
-        btnGet.disabled = false;
-        return;
+      function log(msg, cls) {
+        try {
+          var p = document.createElement('div');
+          if (cls) p.className = cls;
+          p.textContent = msg;
+          logEl.appendChild(p);
+          logEl.scrollTop = logEl.scrollHeight;
+          console.log("[WEBAPP]", msg);
+        } catch(e) { console.log("[WEBAPP][LOG_ERR]", e && e.message ? e.message : e); }
       }
 
-      const opts = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
-      const initData = tg.initData;
-
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, opts);
-      }).catch((e) => {
-        log("Error de geolocalización: " + e.message, "err");
-        btnGet.disabled = false;
-        return null;
-      });
-
-      if (!position) return;
-
-      const { latitude, longitude, accuracy } = position.coords || {};
-      const t = Date.now();
-
-      log(\`OK: lat=\${latitude} lon=\${longitude} acc=\${accuracy}m\`, "ok");
-      try {
-        const payload = {
-          src: "webapp",
-          t,
-          lat: Number(latitude),
-          lon: Number(longitude),
-          acc: typeof accuracy === "number" ? Math.round(accuracy) : null,
-          initData
-        };
-        tg.sendData(JSON.stringify(payload));
-        log("Datos enviados al bot. Puedes cerrar esta ventana.", "ok");
-        setTimeout(() => tg.close(), 600);
-      } catch (e) {
-        log("Fallo al enviar datos al bot: " + (e?.message || e), "err");
-        btnGet.disabled = false;
+      function ready() {
+        try {
+          if (tg && tg.ready) tg.ready();
+          if (tg && tg.expand) tg.expand();
+          log("WebApp lista.", "ok");
+          if (!tg || !tg.initData || tg.initData.length === 0) {
+            log("⚠️ initData ausente. Asegúrate de abrir desde el botón del bot y de haber hecho /setdomain en @BotFather.", "err");
+          }
+        } catch (e) {
+          log("WebApp init error: " + (e && e.message ? e.message : e), "err");
+        }
       }
-    }
 
-    btnGet.addEventListener('click', getAndSendLocation);
-    btnClose.addEventListener('click', () => tg?.close());
-    ready();
+      function getAndSendLocation() {
+        btnGet.disabled = true;
+        log("Solicitando geolocalización del dispositivo...");
+
+        if (!navigator.geolocation) {
+          log("Geolocalización no disponible en este dispositivo.", "err");
+          btnGet.disabled = false;
+          return;
+        }
+
+        var opts = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
+        var initData = (tg && typeof tg.initData === "string") ? tg.initData : "";
+
+        navigator.geolocation.getCurrentPosition(
+          function success(position){
+            try {
+              var c = position && position.coords ? position.coords : {};
+              var latitude = Number(c.latitude);
+              var longitude = Number(c.longitude);
+              var accuracy = (typeof c.accuracy === "number") ? Math.round(c.accuracy) : null;
+              var t = Date.now();
+
+              log("OK: lat=" + latitude + " lon=" + longitude + " acc=" + accuracy + "m", "ok");
+
+              var payload = {
+                src: "webapp",
+                t: t,
+                lat: latitude,
+                lon: longitude,
+                acc: accuracy,
+                initData: initData
+              };
+              var text = JSON.stringify(payload);
+
+              if (tg && typeof tg.sendData === "function") {
+                tg.sendData(text);
+                log("Datos enviados al bot. Puedes cerrar esta ventana.", "ok");
+                setTimeout(function(){ if (tg && tg.close) tg.close(); }, 600);
+              } else {
+                log("No se pudo enviar al bot: sendData no disponible (¿no estás dentro de Telegram?).", "err");
+                btnGet.disabled = false;
+              }
+            } catch(e) {
+              log("Error armando/enviando payload: " + (e && e.message ? e.message : e), "err");
+              btnGet.disabled = false;
+            }
+          },
+          function error(err){
+            log("Error de geolocalización: " + (err && err.message ? err.message : JSON.stringify(err)), "err");
+            btnGet.disabled = false;
+          },
+          opts
+        );
+      }
+
+      btnGet.addEventListener('click', getAndSendLocation);
+      btnClose.addEventListener('click', function(){ if (tg && tg.close) tg.close(); });
+      ready();
+    })();
   </script>
 </body>
 </html>
