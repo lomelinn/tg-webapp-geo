@@ -19,7 +19,7 @@
     .btn-primary { background: var(--tg-theme-button-color, #2ea6ff); color: var(--tg-theme-button-text-color, #fff); }
     .btn-ghost { background: transparent; color: inherit; border: 1px dashed rgba(255,255,255,.3); }
     .muted { font-size: 12px; opacity: .7; }
-    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; font-size: 12px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 10px; min-height: 56px; }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; font-size: 12px; background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px; margin-top: 10px; min-height: 70px; }
     .ok { color: #00d084; }
     .err { color: #ff6b6b; }
   </style>
@@ -27,7 +27,7 @@
 <body>
   <div class="wrap">
     <h1>📍 Captura Segura de Ubicación</h1>
-    <p>Esta pantalla usa la <strong>Telegram WebApp</strong> firmada. Al tocar el botón, tomamos tu ubicación <em>actual</em> del GPS y la enviamos al bot.</p>
+    <p>Esta pantalla usa la <strong>Telegram WebApp</strong> firmada. Abre este sitio desde el botón del bot.</p>
 
     <div class="card" id="card">
       <div class="row" style="margin-bottom: 12px;">
@@ -37,7 +37,7 @@
         <button class="btn btn-ghost" id="btnClose">Cerrar</button>
       </div>
       <div class="log" id="log"></div>
-      <p class="muted">Tip: da permiso de ubicación a Telegram y activa “Precisa” en iPhone. No uses el clip.</p>
+      <p class="muted">Tip: da permiso de ubicación a Telegram. No uses el clip.</p>
     </div>
   </div>
 
@@ -59,14 +59,23 @@
         } catch(e) { console.log("[WEBAPP][LOG_ERR]", e && e.message ? e.message : e); }
       }
 
+      function qs(name) {
+        var m = new RegExp("[?&]" + name + "=([^&]+)").exec(location.search);
+        return m ? decodeURIComponent(m[1]) : "";
+      }
+
       function ready() {
         try {
           if (tg && tg.ready) tg.ready();
           if (tg && tg.expand) tg.expand();
           log("WebApp lista.", "ok");
-          if (!tg || !tg.initData || tg.initData.length === 0) {
-            log("⚠️ initData ausente. Asegúrate de abrir desde el botón del bot y de haber hecho /setdomain en @BotFather.", "err");
-          }
+          var id = (tg && typeof tg.initData === "string") ? tg.initData : "";
+          if (!id || id.length === 0) log("⚠️ initData AUSENTE (ok: usaremos firma de URL).", "err");
+          else log("initData OK (len=" + id.length + ")", "ok");
+
+          var n = qs("n"), s = qs("s");
+          if (n && s) log("Firma URL presente ✔", "ok");
+          else log("⚠️ Falta firma URL en query (n/s). Asegúrate de abrir desde /ubicacion.", "err");
         } catch (e) {
           log("WebApp init error: " + (e && e.message ? e.message : e), "err");
         }
@@ -84,6 +93,7 @@
 
         var opts = { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 };
         var initData = (tg && typeof tg.initData === "string") ? tg.initData : "";
+        var n = qs("n"), s = qs("s");
 
         navigator.geolocation.getCurrentPosition(
           function success(position){
@@ -102,7 +112,9 @@
                 lat: latitude,
                 lon: longitude,
                 acc: accuracy,
-                initData: initData
+                initData: initData, // puede venir vacío; el bot usará la firma URL
+                n: n,
+                s: s
               };
               var text = JSON.stringify(payload);
 
